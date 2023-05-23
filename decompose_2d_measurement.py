@@ -80,7 +80,7 @@ def matrix_pivot_search(N, M, data, tt):
 
 
 def main():
-    N_ITER = 90
+    N_ITER = 50
 
     # Read in data
     data = scipy.io.loadmat("p2dnmr.mat")['data']
