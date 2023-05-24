@@ -4,6 +4,8 @@ import tensorflow as tf
 # gpu = tf.config.list_physical_devices('GPU')
 # tf.config.experimental.set_memory_growth(device=gpu[0], enable=True)
 from new_functions import *
+import os
+os.environ["MPLBACKEND"] = 'WebAgg'
 import matplotlib.pyplot as plt
 
 err_wanted = 1.e-5
@@ -101,3 +103,11 @@ plt.xlabel("Sweeps")
 plt.ylabel("Max relative error")
 plt.savefig("sweeps.pdf")
 plt.clf()
+
+plt.imshow(A)
+plt.show()
+plt.clf()
+
+
+plt.imshow(evaluate_full(parts, I))
+plt.show()
