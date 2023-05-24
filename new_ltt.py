@@ -1,6 +1,5 @@
 import numpy as np
 import scipy.io
-import tensorflow as tf
 # gpu = tf.config.list_physical_devices('GPU')
 # tf.config.experimental.set_memory_growth(device=gpu[0], enable=True)
 from new_functions import *
@@ -42,7 +41,8 @@ all_pivots = tf.concat(pivots, axis=0)
 sweeps = 0
 
 try:
-    while sweeps<50:#while err_max_list[-1] > err_wanted:
+    while sweeps<250:#while err_max_list[-1] > err_wanted:
+        print(pivots)
         # print(parts)
         max_err_i = 0
         # print(I)
@@ -71,7 +71,7 @@ try:
                     tf.reduce_all(tf.expand_dims(Ik_plus, axis=0) == tf.expand_dims(I_k_plus_update[-1:], axis=1),
                                   axis=2),
                     axis=1))
-                if add_condJ and add_condI:  # just in case
+                if True:#add_condJ and add_condI:  # just in case #fixme what is going on here exactly
                     parts[k] = pparts
                     parts[k + 1] = pparts_plus
                     J[k] = J_k_update
@@ -104,10 +104,12 @@ plt.ylabel("Max relative error")
 plt.savefig("sweeps.pdf")
 plt.clf()
 
-plt.imshow(A)
-plt.show()
-plt.clf()
 
-
-plt.imshow(evaluate_full(parts, I))
+# plt.figure()
+# plt.imshow(A, aspect='auto', cmap='turbo')
+# plt.colorbar()
+# plt.show()
+plt.figure()
+plt.imshow(evaluate_full(parts, I)-A, aspect='auto', cmap='turbo')
+plt.colorbar()
 plt.show()

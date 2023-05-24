@@ -46,7 +46,7 @@ def QR(Tk, I_plus, I):
     full_Q = tf.linalg.qr(Tk_changed)[0]
     Q = tf.gather(full_Q, Pk_changed_inxs)
     Q_tag = tf.gather(full_Q, all_but_Pk)
-    Q_inv = tf.linalg.inv(Q)
+    Q_inv = tf.linalg.pinv(Q)
     bottom = tf.matmul(Q_tag, Q_inv)
     top = tf.eye(tf.shape(Pk_inxs_right)[0], dtype=tf.float32)
     r = tf.scatter_nd(tf.transpose([all_but_Pk]), bottom, [size[0] * size[1], size[2]])
@@ -79,7 +79,13 @@ def exact_search(A, ind):
     max_err = tf.reduce_max(A)
     shift_diff = (A - tf.reduce_max(A))
     new_pivot = tf.gather_nd(ind, tf.where(shift_diff == 0))
-    return max_err, new_pivot[0:1, :]
+    np = tf.random.uniform(
+        [1],
+        minval=0,
+        maxval=tf.shape(new_pivot)[0],
+        dtype=tf.dtypes.int32,
+    )[0]
+    return max_err, new_pivot[np:np+1, :]
 
 def find_pivot(A, parts, fullI, Tk, Tk_plus, I, I_plus, J_plus, k, half, err_wanted):
     A_shape = tf.shape(A)
