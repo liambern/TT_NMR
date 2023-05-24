@@ -19,7 +19,7 @@ with open("ser_final_bin_im", "rb") as f:
 tensor3D = tf.cast(tf.constant(np.reshape(re_data+im_data, (120, 84, 2560)).astype(float)), tf.float32)
 tensor2D = tf.cast(tf.constant(np.imag(scipy.io.loadmat("p2dnmr.mat")['data'])+np.real(scipy.io.loadmat("p2dnmr.mat")['data'])), tf.float32)
 
-A = tensor3D
+A = tensor2D
 A_shape = A.shape
 d = len(A_shape)
 
@@ -43,7 +43,8 @@ sweeps = 0
 try:
     while sweeps<250:#while err_max_list[-1] > err_wanted:
         print(sweeps)
-        print(pivots)
+        # print(I)
+        # print(J)
 
         # print(parts)
         max_err_i = 0
@@ -51,10 +52,8 @@ try:
         for k in (list(range(len(A_shape) - 1)) + list(range(len(A_shape) - 1)[::-1])):
             part_k, part_k_plus, Ik, Ik_plus, Jk, Jk_plus, pivots_k, k = parts[k], parts[k + 1], I[k], I[k + 1], J[k], \
                                                                          J[k + 1], pivots[k], k
-            try:
-                pivot, max_err_pi = find_pivot(A, parts, I, part_k, part_k_plus, Ik, Ik_plus, Jk_plus, k, half, err_wanted)
-            except:
-                break
+            pivot, max_err_pi = find_pivot(A, parts, I, part_k, part_k_plus, Ik, Ik_plus, Jk_plus, k, half, err_wanted)
+
             if half:
                 for halfi in range(5):
                     test_pivot, test_max_err_pi = find_pivot(A, parts, I, part_k, part_k_plus, Ik, Ik_plus, Jk_plus, k,

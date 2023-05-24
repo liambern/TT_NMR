@@ -37,14 +37,14 @@ def QR(Tk, I_plus, I):
     size = tf.shape(Tk)
     Pk_inxs_right = I_plus[:, -1]
     Pk_inxs_left = I_plus[:, :-1]
+
     Tk_changed = tf.reshape(Tk, [size[0] * size[1], size[2]])
     full_inxs = tf.transpose([tf.range(size[0] * size[1])])
     first_inx = tf.cast(tf.where(tf.reduce_all(tf.expand_dims(I, 0) == tf.expand_dims(Pk_inxs_left, 1), axis=2))[:, 1],
-                        tf.int32)
-    # tf.print(tf.shape(Pk_inxs_right))
-    # tf.print(tf.shape(first_inx))
+                        tf.int32)[:size[2]]
 
-    Pk_changed_inxs = (first_inx * size[1] + Pk_inxs_right)
+    Pk_changed_inxs = (first_inx * size[1] + Pk_inxs_right) #fixme something is wrong with ,first_inx[:size[2]], the method of finding the inner matrix P is not injective...
+
     all_but_Pk = tf.reshape(tf.where(tf.logical_not(tf.reduce_any(full_inxs == Pk_changed_inxs, axis=1))), [-1])
     full_Q = tf.linalg.qr(Tk_changed)[0]
     Q = tf.gather(full_Q, Pk_changed_inxs)
@@ -96,7 +96,7 @@ def find_pivot(A, parts, fullI, Tk, Tk_plus, I, I_plus, J_plus, k, half, err_wan
         I_used = I
         all_k = tf.transpose([tf.range(A_shape[k])])
         all_k_plus = tf.transpose([tf.range(A_shape[k + 1])])
-        J_used = J_plfus
+        J_used = J_plus
         if tf.cast(tf.random.uniform([1], maxval=2, dtype=tf.int32), tf.bool):
             r1 = tf.random.uniform([1], maxval=tf.shape(I_used)[0], dtype=tf.int32)[0]
             I_used = I_used[r1:r1 + 1]
