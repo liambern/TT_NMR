@@ -9,7 +9,7 @@ def save_data(x, y, name): #makesure x is int
         np.savetxt(f, x.numpy(), delimiter=",", fmt='%i')
         f.close()
     with open("file2.txt", "ab") as f:
-        np.savetxt(f, y.numpy())
+        np.savetxt(f, y, fmt='%s')
         f.close()
     with open('file1.txt', 'r') as file1:
         lines1 = file1.readlines()
@@ -27,23 +27,9 @@ def save_data(x, y, name): #makesure x is int
         f.write('\n')
         f.close()
 
-data = scipy.io.loadmat("newnoy/data.mat")['data']
-# data = scipy.io.loadmat("newnoy/p2dnmr.mat")['data']
 
-
-#shape = (46,32,2560)
-real_data3D = np.real(data)
-imag_data3D = np.imag(data)
-shape = imag_data3D.shape
-def real_part3D(x):
-    return tf.gather_nd(real_data3D, x)
-
-# @tf.function(experimental_relax_shapes=True)
-def imag_part3D(x):
-    return tf.transpose([tf.gather_nd(imag_data3D, x)])
-
-def send_to_machine(x):
-    return imag_part3D(x)
+def send_to_machine(x ,machine):
+    return machine(x)
 
 
 
@@ -53,29 +39,43 @@ def create_temporary_copy(path):
   return tmp.name
 
 
-def eval_nmr(x, name):
+def eval_nmr(x, name, machine):
     if os.path.isfile(name):
         f = create_temporary_copy(name)
         init = tf.lookup.TextFileInitializer(
             filename=f,
             key_dtype=tf.string, key_index=0,
-            value_dtype=tf.float64, value_index=1,
+            value_dtype=tf.string, value_index=1,
             delimiter=" ")
-        dic = tf.lookup.StaticHashTable(init, default_value=6.62607) #just a specific number that we can find
+        dic = tf.lookup.StaticHashTable(init, default_value='6.62607,0.0') #just a specific number that we can find
         x_look = tf.constant(np.array([[f'{",".join(map(str, row))}'] for row in x.numpy()]))
         save_results = dic.lookup(x_look)
-        unkown_coordinates = tf.where((save_results == 6.62607)[:, 0])
+        unkown_coordinates = tf.where((save_results == '6.62607,0.0')[:, 0])
         print(unkown_coordinates.shape)
+        save_results = tf.cast(tf.strings.to_number(tf.strings.split(tf.reshape(save_results, -1), sep=',').to_tensor(), tf.float64), tf.complex128)
+        save_results = save_results[:, 0:1] + 1.j * save_results[:, 1:2]
+        save_results = save_results[:, 0]
         if tf.shape(unkown_coordinates)[0] == 0:
             r = save_results
         else:
             to_measure = tf.gather_nd(x, unkown_coordinates)
-            new_y = send_to_machine(to_measure)
-            save_data(to_measure, new_y, name)
+            new_y = send_to_machine(to_measure, machine)
             r = tf.tensor_scatter_nd_update(save_results, unkown_coordinates, new_y)
+            r = tf.expand_dims(r, 1)
+            new_y = tf.expand_dims(new_y, 1)
+            new_y = tf.transpose(tf.concat(
+                [tf.strings.as_string(tf.math.real(new_y)), tf.strings.as_string(tf.math.imag(new_y))],
+                axis=1))
+            new_y = tf.reshape(tf.strings.join(new_y, separator=','), [tf.shape(new_y)[1], 1]).numpy().astype(str)
+            save_data(to_measure, new_y, name)
     else:
         to_measure = x
-        new_y = send_to_machine(to_measure)
-        save_data(to_measure, new_y, name)
+        new_y = tf.expand_dims(send_to_machine(to_measure, machine), 1)
+        print(new_y)
         r = new_y
+        new_y = tf.transpose(tf.concat(
+            [tf.strings.as_string(tf.math.real(new_y)), tf.strings.as_string(tf.math.imag(new_y))],
+            axis=1))
+        new_y = tf.reshape(tf.strings.join(new_y, separator=','), [tf.shape(new_y)[1], 1]).numpy().astype(str)
+        save_data(to_measure, new_y, name)
     return r
