@@ -29,27 +29,28 @@ import scipy.io
 
 
 def save_data(x, y, name): #makesure x is int
-    with open("file1.txt", "ab") as f:
-        np.savetxt(f, x.numpy(), delimiter=",", fmt='%i')
-        f.close()
-    with open("file2.txt", "ab") as f:
-        np.savetxt(f, y.numpy())
-        f.close()
-    with open('file1.txt', 'r') as file1:
-        lines1 = file1.readlines()
-        file1.close()
-    # Read the second file
-    with open('file2.txt', 'r') as file2:
-        lines2 = file2.readlines()
-        file2.close()
-    combined_lines = [f"{line1.strip()} {line2.strip()}" for line1, line2 in zip(lines1, lines2)]
-    result = '\n'.join(combined_lines)
-    os.remove('file1.txt')
-    os.remove('file2.txt')
-    with open(name, 'a') as f:
-        f.write(result)
-        f.write('\n')
-        f.close()
+    if len(x) > 0:
+        with open("file1.txt", "ab") as f:
+            np.savetxt(f, x.numpy(), delimiter=",", fmt='%i')
+            f.close()
+        with open("file2.txt", "ab") as f:
+            np.savetxt(f, y.numpy())
+            f.close()
+        with open('file1.txt', 'r') as file1:
+            lines1 = file1.readlines()
+            file1.close()
+        # Read the second file
+        with open('file2.txt', 'r') as file2:
+            lines2 = file2.readlines()
+            file2.close()
+        combined_lines = [f"{line1.strip()} {line2.strip()}" for line1, line2 in zip(lines1, lines2)]
+        result = '\n'.join(combined_lines)
+        os.remove('file1.txt')
+        os.remove('file2.txt')
+        with open(name, 'a') as f:
+            f.write(result)
+            f.write('\n')
+            f.close()
 
 
 def send_to_machine(x ,machine):
@@ -63,7 +64,7 @@ def create_temporary_copy(path):
   return tmp.name
 
 
-def eval_nmr(x, name, machine):
+def eval_nmr(x, name, machine, shape):
     if os.path.isfile(name+'_real'):
         f1 = create_temporary_copy(name+'_real')
         f2 = create_temporary_copy(name+'_imag')
@@ -83,10 +84,14 @@ def eval_nmr(x, name, machine):
         save_results_real = dic_real.lookup(x_look)
         save_results_imag = dic_imag.lookup(x_look)
         unkown_coordinates = tf.where((save_results_real == 6.62607)[:, 0]) #real or imag doesn't matter
-        print(unkown_coordinates.shape)
+        # print(unkown_coordinates.shape)
         # save_results = tf.cast(save_results_real, tf.complex128)
         save_results = tf.cast(save_results_real, tf.complex128) + 1.j * tf.cast(save_results_imag, tf.complex128)
         save_results = save_results[:, 0]
+        # print(f1)
+        # print(f2)
+        os.remove(f1)
+        os.remove(f2)
         if tf.shape(unkown_coordinates)[0] == 0:
             r = save_results
         else:
@@ -99,18 +104,32 @@ def eval_nmr(x, name, machine):
             #     [tf.strings.as_string(tf.math.real(new_y)), tf.strings.as_string(tf.math.imag(new_y))],
             #     axis=1))
             # new_y = tf.reshape(tf.strings.join(new_y, separator=','), [tf.shape(new_y)[1], 1]).numpy().astype(str)
-            save_data(to_measure, tf.math.real(new_y), name+'_real')
-            save_data(to_measure, tf.math.imag(new_y), name+'_imag')
+            # tf.print(tf.where(new_y == 0.))
+            # print(shape)
+            cond = to_measure[:, 0] >= shape[0]
+            for i in range(1, len(shape)):
+                cond = tf.math.logical_or(cond, to_measure[:, i] >= shape[i])
+            cond = tf.where(tf.logical_not(cond))
+            to_save = tf.gather_nd(to_measure, cond)
+            # tf.math.logical_or(to_measure[:])
+            save_data(to_save, tf.gather_nd(tf.math.real(new_y), cond), name+'_real')
+            save_data(to_save, tf.gather_nd(tf.math.imag(new_y), cond), name+'_imag')
     else:
         to_measure = x
         new_y = tf.expand_dims(send_to_machine(to_measure, machine), 1)
-        print(new_y)
         r = new_y
+        # print(shape)
+        # print(to_measure)
         # new_y = tf.transpose(tf.concat(
         #     [tf.strings.as_string(tf.math.real(new_y)), tf.strings.as_string(tf.math.imag(new_y))],
         #     axis=1))
         # new_y = tf.reshape(tf.strings.join(new_y, separator=','), [tf.shape(new_y)[1], 1]).numpy().astype(str)
-        save_data(to_measure, tf.math.real(new_y), name + '_real')
-        save_data(to_measure, tf.math.imag(new_y), name + '_imag')
+        cond = to_measure[:, 0] >= shape[0]
+        for i in range(1, len(shape)):
+            cond = tf.math.logical_or(cond, to_measure[:, i] >= shape[i])
+        cond = tf.where(tf.logical_not(cond))
+        to_save = tf.gather_nd(to_measure, cond)
+        save_data(to_save, tf.gather_nd(tf.math.real(new_y), cond), name + '_real')
+        save_data(to_save, tf.gather_nd(tf.math.imag(new_y), cond), name + '_imag')
 
     return r
