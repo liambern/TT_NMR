@@ -56,6 +56,7 @@ def quantics2normal(mps):
         mid = tf.transpose(mid, list(range(0, mps.R * mps.dim, 2)) + list(range(1, mps.R * mps.dim, 2)))
         return tf.reshape(mid, [2 ** mps.R, 2 ** mps.R])
 
+dummy = np.ones(shape, dtype=np.cdouble)*6.62607
 for i in [0.01, 0.05, 0.1, 0.2, 0.5]:
     NMR_file = 'test' + str(i)
     def measure(x):
@@ -109,7 +110,7 @@ for i in [0.01, 0.05, 0.1, 0.2, 0.5]:
 
 
     #
-    lines = tci.count_lines(NMR_file+'_real')
+    lines = tci.count_lines(NMR_file)
     print('Used only ' + str(lines / np.prod(shape) * 100)[:6], '% of the data!')
     # print('Max error: ', np.max(tci.approx_error(data, nmr_mps, threshold, rerr)))
 
