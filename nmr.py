@@ -1,7 +1,7 @@
 import numpy as np
 import tensorflow as tf
 import tempfile, shutil
-
+import h5py
 import os
 import scipy.io
 # def save_data(x, y, name): #makesure x is int
@@ -56,7 +56,45 @@ def save_data(x, y, name): #makesure x is int
 def send_to_machine(x ,machine):
     return machine(x)
 
+def write_scattered_points_to_hdf5(filename, coordinates, values, shape):
+    with h5py.File(filename, 'a') as f:
+        try:
+            dataset = f['points']
+        except KeyError:
+            dataset = f.create_dataset('points', shape=shape, dtype=values.dtype, chunks=True)
+            dataset[:] = 6.62607 + 0.j
+        for i in range(len(coordinates)):
+            dataset[coordinates[i, 0], coordinates[i, 1]] = values[i]
 
+
+def read_points_from_hdf5(filename, coordinates):
+    result = []
+    with h5py.File(filename, 'r') as f:
+        dataset = f['points']
+        for i in range(len(coordinates)):
+            try:
+                result.append([dataset[coordinates[i][0], coordinates[i][1]]])
+            except IndexError: #out of bounds
+                result.append([0.])
+    return np.array(result)
+
+# from multiprocessing import Pool
+#
+# def read_point_from_dataset(args):
+#     data, coord = args
+#     try:
+#         return data[coord[0], coord[1]]
+#     except IndexError:
+#         return 0.0
+#
+# def read_points_from_hdf5(filename, coordinates):
+#     with h5py.File(filename, 'r') as f:
+#         data = f['points'][:]
+#     args = [(data, coord) for coord in coordinates]
+#     with Pool() as pool:
+#         result = pool.map(read_point_from_dataset, args)
+#     print(result)
+#     return np.array([result]).T
 
 def create_temporary_copy(path):
   tmp = tempfile.NamedTemporaryFile(delete=False)
@@ -64,34 +102,37 @@ def create_temporary_copy(path):
   return tmp.name
 
 
-def eval_nmr(x, name, machine, shape):
-    if os.path.isfile(name+'_real'):
-        f1 = create_temporary_copy(name+'_real')
-        f2 = create_temporary_copy(name+'_imag')
-        init_real = tf.lookup.TextFileInitializer(
-            filename=f1,
-            key_dtype=tf.string, key_index=0,
-            value_dtype=tf.float64, value_index=1,
-            delimiter=" ")
-        init_imag = tf.lookup.TextFileInitializer(
-            filename=f2,
-            key_dtype=tf.string, key_index=0,
-            value_dtype=tf.float64, value_index=1,
-            delimiter=" ")
-        dic_real = tf.lookup.StaticHashTable(init_real, default_value=6.62607) #just a specific number that we can find
-        dic_imag = tf.lookup.StaticHashTable(init_imag, default_value=6.62607)
-        x_look = tf.constant(np.array([[f'{",".join(map(str, row))}'] for row in x.numpy()]))
-        save_results_real = dic_real.lookup(x_look)
-        save_results_imag = dic_imag.lookup(x_look)
-        unkown_coordinates = tf.where((save_results_real == 6.62607)[:, 0]) #real or imag doesn't matter
+def eval_nmr(x, name, machine, shape, dummy):
+    if os.path.isfile(name):
+        # f1 = create_temporary_copy(name+'_real')
+        # f2 = create_temporary_copy(name+'_imag')
+        # init_real = tf.lookup.TextFileInitializer(
+        #     filename=f1,
+        #     key_dtype=tf.string, key_index=0,
+        #     value_dtype=tf.float64, value_index=1,
+        #     delimiter=" ")
+        # init_imag = tf.lookup.TextFileInitializer(
+        #     filename=f2,
+        #     key_dtype=tf.string, key_index=0,
+        #     value_dtype=tf.float64, value_index=1,
+        #     delimiter=" ")
+        # dic_real = tf.lookup.StaticHashTable(init_real, default_value=6.62607) #just a specific number that we can find
+        # dic_imag = tf.lookup.StaticHashTable(init_imag, default_value=6.62607)
+        # x_look = tf.constant(np.array([[f'{",".join(map(str, row))}'] for row in x.numpy()]))
+        # save_results_real = dic_real.lookup(x_look)
+        # save_results_imag = dic_imag.lookup(x_look)
+        save_results = read_points_from_hdf5(name, x.numpy())
+        unkown_coordinates = tf.where((save_results == 6.62607)[:, 0]) #real or imag doesn't matter
+
+        # unkown_coordinates = tf.where((save_results_real == 6.62607)[:, 0]) #real or imag doesn't matter
         # print(unkown_coordinates.shape)
         # save_results = tf.cast(save_results_real, tf.complex128)
-        save_results = tf.cast(save_results_real, tf.complex128) + 1.j * tf.cast(save_results_imag, tf.complex128)
+        # save_results = tf.cast(save_results_real, tf.complex128) + 1.j * tf.cast(save_results_imag, tf.complex128)
         save_results = save_results[:, 0]
         # print(f1)
         # print(f2)
-        os.remove(f1)
-        os.remove(f2)
+        # os.remove(f1)
+        # os.remove(f2)
         if tf.shape(unkown_coordinates)[0] == 0:
             r = save_results
         else:
@@ -112,8 +153,9 @@ def eval_nmr(x, name, machine, shape):
             cond = tf.where(tf.logical_not(cond))
             to_save = tf.gather_nd(to_measure, cond)
             # tf.math.logical_or(to_measure[:])
-            save_data(to_save, tf.gather_nd(tf.math.real(new_y), cond), name+'_real')
-            save_data(to_save, tf.gather_nd(tf.math.imag(new_y), cond), name+'_imag')
+            write_scattered_points_to_hdf5(name, to_save.numpy(), new_y.numpy(), shape)
+            # save_data(to_save, tf.gather_nd(tf.math.real(new_y), cond), name+'_real')
+            # save_data(to_save, tf.gather_nd(tf.math.imag(new_y), cond), name+'_imag')
     else:
         to_measure = x
         new_y = tf.expand_dims(send_to_machine(to_measure, machine), 1)
@@ -129,7 +171,8 @@ def eval_nmr(x, name, machine, shape):
             cond = tf.math.logical_or(cond, to_measure[:, i] >= shape[i])
         cond = tf.where(tf.logical_not(cond))
         to_save = tf.gather_nd(to_measure, cond)
-        save_data(to_save, tf.gather_nd(tf.math.real(new_y), cond), name + '_real')
-        save_data(to_save, tf.gather_nd(tf.math.imag(new_y), cond), name + '_imag')
+        write_scattered_points_to_hdf5(name, to_save.numpy(), new_y.numpy(), shape)
+        # save_data(to_save, tf.gather_nd(tf.math.real(new_y), cond), name + '_real')
+        # save_data(to_save, tf.gather_nd(tf.math.imag(new_y), cond), name + '_imag')
 
     return r
