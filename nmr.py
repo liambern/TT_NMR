@@ -62,9 +62,20 @@ def write_scattered_points_to_hdf5(filename, coordinates, values, shape):
             dataset = f['points']
         except KeyError:
             dataset = f.create_dataset('points', shape=shape, dtype=values.dtype, chunks=True)
-            dataset[:] = 6.62607 + 0.j
+            # dataset[:] = 6.62607 + 0.j
         for i in range(len(coordinates)):
             dataset[coordinates[i, 0], coordinates[i, 1]] = values[i]
+
+def write_scattered_points_to_hdf5(filename, coordinates, values, shape):
+    with h5py.File(filename, 'a') as f:
+        try:
+            dataset = f['points']
+        except KeyError:
+            dataset = f.create_dataset('points', shape=shape, dtype=values.dtype, chunks=True)
+            # dataset[:] = 6.62607 + 0.j
+        for i in range(len(coordinates)):
+            dataset[coordinates[i, 0], coordinates[i, 1]] = values[i]
+
 
 
 def read_points_from_hdf5(filename, coordinates):
@@ -102,8 +113,11 @@ def create_temporary_copy(path):
   return tmp.name
 
 
-def eval_nmr(x, name, machine, shape, dummy):
-    if os.path.isfile(name):
+def eval_nmr(x, name, machine, shape):
+    fake = False
+    if type(name) != str:
+        fake = True
+    if os.path.isfile(name) or fake:
         # f1 = create_temporary_copy(name+'_real')
         # f2 = create_temporary_copy(name+'_imag')
         # init_real = tf.lookup.TextFileInitializer(
@@ -121,9 +135,14 @@ def eval_nmr(x, name, machine, shape, dummy):
         # x_look = tf.constant(np.array([[f'{",".join(map(str, row))}'] for row in x.numpy()]))
         # save_results_real = dic_real.lookup(x_look)
         # save_results_imag = dic_imag.lookup(x_look)
-        save_results = read_points_from_hdf5(name, x.numpy())
-        unkown_coordinates = tf.where((save_results == 6.62607)[:, 0]) #real or imag doesn't matter
-
+        if fake:
+            save_results = tf.expand_dims(tf.gather_nd(name, x), 1)
+        else:
+            save_results = read_points_from_hdf5(name, x.numpy())
+        # print(1)
+        # print(save_results)
+        unkown_coordinates = tf.where((save_results == 0.)[:, 0]) #real or imag doesn't matter
+        save_results =tf.where(save_results == 6.62607+0.j, 0.+0.j, save_results)
         # unkown_coordinates = tf.where((save_results_real == 6.62607)[:, 0]) #real or imag doesn't matter
         # print(unkown_coordinates.shape)
         # save_results = tf.cast(save_results_real, tf.complex128)
@@ -138,6 +157,8 @@ def eval_nmr(x, name, machine, shape, dummy):
         else:
             to_measure = tf.gather_nd(x, unkown_coordinates)
             new_y = send_to_machine(to_measure, machine)
+            # print(2)
+            # print(new_y)
             r = tf.tensor_scatter_nd_update(save_results, unkown_coordinates, new_y)
             r = tf.expand_dims(r, 1)
             # new_y = tf.expand_dims(new_y, 1)
@@ -152,9 +173,14 @@ def eval_nmr(x, name, machine, shape, dummy):
                 cond = tf.math.logical_or(cond, to_measure[:, i] >= shape[i])
             cond = tf.where(tf.logical_not(cond))
             to_save = tf.gather_nd(to_measure, cond)
+            new_y = tf.where(new_y == 0., 6.62607, new_y)
             # tf.math.logical_or(to_measure[:])
-            write_scattered_points_to_hdf5(name, to_save.numpy(), new_y.numpy(), shape)
-            # save_data(to_save, tf.gather_nd(tf.math.real(new_y), cond), name+'_real')
+            if fake:
+                # print(tf.gather_nd(new_y, cond).numpy())
+                name[tuple(to_save.numpy().T)] = tf.gather_nd(new_y, cond).numpy()
+            else:
+                write_scattered_points_to_hdf5(name, to_save.numpy(), tf.gather_nd(new_y, cond).numpy(), shape)
+            # save_data(to_save, tf.gather_nd(tf.math.real(new_y), name+'_real')
             # save_data(to_save, tf.gather_nd(tf.math.imag(new_y), cond), name+'_imag')
     else:
         to_measure = x
@@ -171,8 +197,11 @@ def eval_nmr(x, name, machine, shape, dummy):
             cond = tf.math.logical_or(cond, to_measure[:, i] >= shape[i])
         cond = tf.where(tf.logical_not(cond))
         to_save = tf.gather_nd(to_measure, cond)
+        new_y = tf.gather_nd(new_y, cond)
+        new_y = tf.where(new_y == 0., 6.62607, new_y)
         write_scattered_points_to_hdf5(name, to_save.numpy(), new_y.numpy(), shape)
+
         # save_data(to_save, tf.gather_nd(tf.math.real(new_y), cond), name + '_real')
         # save_data(to_save, tf.gather_nd(tf.math.imag(new_y), cond), name + '_imag')
-
+    # print(r)
     return r

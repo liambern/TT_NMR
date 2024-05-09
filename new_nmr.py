@@ -18,7 +18,7 @@ float_type = tf.complex128
 int_type = tf.int64
 # x_min = -5.
 # x_max = 5.
-threshold = 500
+threshold = 100
 dim = 2
 test = True
 rerr = False
@@ -56,23 +56,59 @@ def quantics2normal(mps):
         mid = tf.transpose(mid, list(range(0, mps.R * mps.dim, 2)) + list(range(1, mps.R * mps.dim, 2)))
         return tf.reshape(mid, [2 ** mps.R, 2 ** mps.R])
 
+import math
+def closest_power_of_2(number):
+    if number <= 1:
+        return 0  # 2^0 is 1, so the closest power of 2 under 1 is 2^0
+
+    exponent = math.floor(math.log2(number))
+    return exponent
+
+def closest_power_of_2_max(number):
+    if number <= 1:
+        return 0  # 2^0 is 1, so the closest power of 2 under 1 is 2^0
+
+    exponent = math.ceil(math.log2(number))
+    return exponent
+R = tf.cast(closest_power_of_2_max(tf.reduce_max(shape)), int_type)
+R_extras = []
+for i in shape:
+    R_extras.append(tf.cast(closest_power_of_2(i), int_type).numpy())
+def extra_func():
+    extra_pivs = []
+    for i in range(0, min(R_extras)+1):
+        new_piv = []
+        for di in range(dim):
+            new_piv.append((2 ** (R_extras[di] - min(R_extras))) * 2 ** i - 1)
+        extra_pivs.append(new_piv)
+    extra_pivs = tci.cartesian_to_quantics(tf.constant(extra_pivs, dtype=int_type), dim, R)
+    return extra_pivs
 dummy = np.ones(shape, dtype=np.cdouble)*6.62607
-for i in [0.01, 0.05, 0.1, 0.2, 0.5]:
+for i in [0.5]:
     NMR_file = 'test' + str(i)
-    def measure(x):
-        return eval_nmr(x, NMR_file, machine, shape)
+    # def measure(x):
+    #     return tf.cast(eval_nmr(x, NMR_file, machine, shape), float_type)
+    data2 = np.zeros(shape, dtype=np.cdouble)
+    def measure_fake(x, percent=False):
+        if percent:
+            return np.sum(data2 != 0.)
+        else:
+            return tf.cast(eval_nmr(x, data2, machine, shape), float_type)
     # tci.cross_interpolation(measure, 'tensor', 2, shape=shape, initial=tf.constant([shape], dtype=int_type)*0,
     #                     save_mps=NMR_file, test=test, threshold=threshold, half=True, relative_error=rerr,
     #                         NMR_file=NMR_file, NMR_percentage=i)
 
-    tci.cross_interpolation(measure, 'tensor_quantics', 2, shape=shape, initial=tf.zeros([1, 24], int_type),
+
+
+    # last_pivot = tci.cartesian_to_quantics(coordinates, dim, R)
+    tci.cross_interpolation(measure_fake, 'tensor_quantics', 2, shape=shape, initial=tf.zeros([1, 24], int_type),
                             save_mps=NMR_file, test=test, threshold=threshold, half=False, relative_error=rerr,
-                            NMR_file=NMR_file, NMR_percentage=i)
+                            NMR_file=NMR_file, NMR_percentage=i, extra_function=extra_func)
 
     # nmr_mps = tci.load(NMR_file).full()
     nmr_mps = quantics2normal(tci.load(NMR_file))
     nmr_mps = nmr_mps[:shape[0], :shape[1]]
-
+    np.save(str(i), nmr_mps.numpy())
     new_shape = [-1, shape[-1]] # if more than 2d
 
     # nmr_mps = nmr_mps.numpy().reshape(new_shape)
@@ -110,8 +146,10 @@ for i in [0.01, 0.05, 0.1, 0.2, 0.5]:
 
 
     #
-    lines = tci.count_lines(NMR_file)
-    print('Used only ' + str(lines / np.prod(shape) * 100)[:6], '% of the data!')
+    # lines = tci.count_lines(NMR_file)
+    # print('Used only ' + str(lines / np.prod(shape) * 100)[:6], '% of the data!')
+    print('Used only ' + str(np.sum(data2 != 0.) / np.prod(shape) * 100)[:6], '% of the data!')
+
     # print('Max error: ', np.max(tci.approx_error(data, nmr_mps, threshold, rerr)))
 
 # tci.cross_interpolation(measure, 'tensor_quantics', 2, shape=shape, initial=tf.zeros([1, 24], int_type), save_mps='test', test=test, threshold=threshold, half=False, relative_error=True)
