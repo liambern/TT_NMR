@@ -1,0 +1,2 @@
+import matplotlib.gridspec as gridspec
+import pickle; name='0.1test0.01';figx = pickle.load(open(name+'_plt0', 'rb'));figx.show();figx = pickle.load(open(name+'_plt1', 'rb'));figx.show();figx = pickle.load(open(name+'_plt2', 'rb'));figx.show()

@@ -113,7 +113,8 @@ def create_temporary_copy(path):
   return tmp.name
 
 
-def eval_nmr(x, name, machine, shape):
+def eval_nmr(x, name, machine, shape, tile):
+    x = x#//tile
     fake = False
     if type(name) != str:
         fake = True

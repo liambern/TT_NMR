@@ -1,12 +1,12 @@
 import numpy as np
 import scipy.io
-# gpu = tf.config.list_physical_devices('GPU')
-# tf.config.experimental.set_memory_growth(device=gpu[0], enable=True)
-from new_functions import *
+import tensorflow as tf
 import os
 os.environ["MPLBACKEND"] = 'WebAgg'
 import matplotlib.pyplot as plt
-
+import sys
+sys.path.append('../')
+from goodenoughTCI.TCI import TCI, mps
 err_wanted = 1.e-5
 graph = True
 half = False
